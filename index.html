@@ -6,128 +6,86 @@
     <title>Cycle of Runes</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+      
       body {
-        font-family: 'Rajdhani', sans-serif;
-        background-color: #0f172a;
+        font-family: 'Outfit', sans-serif;
+        background-color: #0f172a; /* Darker Slate for Magical vibe */
         color: white;
-        overflow: hidden; /* Prevent scrolling on mobile */
+        overflow: hidden;
         overscroll-behavior: none;
       }
-      /* Hide scrollbar for card container */
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
 
-      /* --- Card Cost Tier Animations (Idle/Hover) --- */
-      
-      .anim-tier-high { animation: pulse-intense 2s infinite ease-in-out; }
-      .anim-tier-mid { animation: float-mid 3s infinite ease-in-out; }
+      /* Hide scrollbar */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-      @keyframes pulse-intense {
-        0%, 100% { box-shadow: 0 0 5px currentColor; transform: scale(1); }
-        50% { box-shadow: 0 0 15px currentColor; transform: scale(1.02); }
+      /* Mask for the hand scroller */
+      .mask-linear-fade {
+        mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+        -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
       }
-      @keyframes float-mid {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-3px); }
-      }
-
-      /* --- Elemental Specifics --- */
-      @keyframes shake-fire { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(1deg); } 75% { transform: rotate(-1deg); } }
-      .element-anim-FIRE.anim-tier-high { animation: shake-fire 0.2s infinite; }
-      
-      @keyframes glow-lightning { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
-      .element-anim-LIGHTNING.anim-tier-high { animation: glow-lightning 0.1s infinite; }
 
       /* --- Combat Animations --- */
-
-      /* Entrance */
       @keyframes card-enter {
         0% { transform: scale(0.2) translateY(50px); opacity: 0; }
-        60% { transform: scale(1.1) translateY(-10px); opacity: 1; }
+        60% { transform: scale(1.05) translateY(-10px); opacity: 1; }
         100% { transform: scale(1) translateY(0); opacity: 1; }
       }
-      .anim-enter { animation: card-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+      .anim-enter { animation: card-enter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
 
-      /* Clash: TENSION -> SNAP -> HOLD */
-      /* Player moves UP */
-      @keyframes clash-player-anim {
-        0% { transform: translateY(0) scale(1) rotate(0deg); }
-        40% { transform: translateY(5vh) scale(0.9) rotate(-5deg); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); } /* Pull back slowly */
-        50% { transform: translateY(-15vh) scale(1.4) rotate(2deg); animation-timing-function: cubic-bezier(0, 0.5, 0.5, 1); box-shadow: 0 0 30px white; z-index: 50; } /* SMASH */
-        60% { transform: translateY(-12vh) scale(1.1) rotate(0deg); z-index: 50; } /* Recoil */
-        100% { transform: translateY(-12vh) scale(1.1) rotate(0deg); z-index: 50; }
+      @keyframes clash-player {
+        0% { transform: translateY(0) rotate(0); }
+        40% { transform: translateY(20px) rotate(-5deg) scale(0.9); }
+        50% { transform: translateY(-100px) rotate(2deg) scale(1.2); }
+        60% { transform: translateY(-80px) rotate(0) scale(1.1); }
+        100% { transform: translateY(-80px) rotate(0) scale(1.1); }
       }
-      .anim-clash-player { animation: clash-player-anim 0.8s forwards; }
+      .anim-clash-player { animation: clash-player 0.6s forwards; z-index: 50; }
 
-      /* Enemy moves DOWN */
-      @keyframes clash-enemy-anim {
-        0% { transform: translateY(0) scale(1) rotate(0deg); }
-        40% { transform: translateY(-5vh) scale(0.9) rotate(-5deg); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); } /* Pull back */
-        50% { transform: translateY(15vh) scale(1.4) rotate(2deg); animation-timing-function: cubic-bezier(0, 0.5, 0.5, 1); box-shadow: 0 0 30px white; z-index: 50; } /* SMASH */
-        60% { transform: translateY(12vh) scale(1.1) rotate(0deg); z-index: 50; } /* Recoil */
-        100% { transform: translateY(12vh) scale(1.1) rotate(0deg); z-index: 50; }
+      @keyframes clash-enemy {
+        0% { transform: translateY(0) rotate(0); }
+        40% { transform: translateY(-20px) rotate(5deg) scale(0.9); }
+        50% { transform: translateY(100px) rotate(-2deg) scale(1.2); }
+        60% { transform: translateY(80px) rotate(0) scale(1.1); }
+        100% { transform: translateY(80px) rotate(0) scale(1.1); }
       }
-      .anim-clash-enemy { animation: clash-enemy-anim 0.8s forwards; }
+      .anim-clash-enemy { animation: clash-enemy 0.6s forwards; z-index: 50; }
 
-      /* Screen Shake on Impact */
-      @keyframes screen-shake {
-        0% { transform: translate(0, 0); }
-        10% { transform: translate(-5px, -5px); }
-        20% { transform: translate(5px, 5px); }
-        30% { transform: translate(-5px, 5px); }
-        40% { transform: translate(5px, -5px); }
-        50% { transform: translate(0, 0); }
+      @keyframes shake {
+        0%, 100% { transform: translate(0, 0); }
+        25% { transform: translate(-5px, 5px); }
+        50% { transform: translate(5px, -5px); }
+        75% { transform: translate(-5px, -5px); }
       }
-      .shake-impact { animation: screen-shake 0.4s ease-out; }
+      .shake-impact { animation: shake 0.3s ease-in-out; }
 
-      /* --- Win/Lose Animations --- */
-
-      @keyframes victory-pulse {
-        0% { transform: scale(1.1); z-index: 60; }
-        50% { transform: scale(1.3); filter: brightness(1.5) contrast(1.2); box-shadow: 0 0 60px currentColor; z-index: 60; }
-        100% { transform: scale(1.2); filter: brightness(1.1); box-shadow: 0 0 30px currentColor; z-index: 60; }
+      @keyframes pop-in {
+        0% { transform: scale(0); }
+        80% { transform: scale(1.2); }
+        100% { transform: scale(1); }
       }
+      .anim-pop { animation: pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
       
-      /* Specific Elemental Wins */
-      .anim-win-FIRE { animation: victory-pulse 1s infinite alternate; color: #ef4444; }
-      .anim-win-WATER { animation: victory-pulse 1s infinite alternate; color: #3b82f6; }
-      .anim-win-EARTH { animation: victory-pulse 1s infinite alternate; color: #10b981; }
-      .anim-win-AIR { animation: victory-pulse 1s infinite alternate; color: #0ea5e9; }
-      .anim-win-LIGHTNING { animation: victory-pulse 1s infinite alternate; color: #eab308; }
-
-      @keyframes defeat-fade {
-        0% { transform: scale(1); opacity: 1; filter: grayscale(0); }
-        100% { transform: scale(0.8) rotate(15deg); opacity: 0; filter: grayscale(1) blur(2px); }
+      @keyframes shimmer {
+        0% { transform: translateX(-150%) skewX(12deg); }
+        100% { transform: translateX(150%) skewX(12deg); }
       }
-      .anim-lose { animation: defeat-fade 0.8s ease-out forwards; pointer-events: none; }
-      
-      /* UI Animations */
-      @keyframes fade-in-up {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .animate-fade-in-up { animation: fade-in-up 0.3s ease-out forwards; }
 
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "vite": "https://esm.sh/vite@^7.3.0"
-  }
-}
-</script>
-</head>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+        "vite": "https://esm.sh/vite@^7.3.0",
+        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+      }
+    }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
