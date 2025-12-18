@@ -16,7 +16,7 @@ export const toggleMute = () => {
   return isMuted;
 };
 
-const playTone = (freq: number, type: OscillatorType, duration: number, vol = 0.1, delay = 0) => {
+const playTone = (freq: number, type: OscillatorType, duration: number, vol = 0.1, delay = 0, rampTo?: number) => {
   if (isMuted || !audioCtx) return;
 
   const osc = audioCtx.createOscillator();
@@ -24,6 +24,9 @@ const playTone = (freq: number, type: OscillatorType, duration: number, vol = 0.
 
   osc.type = type;
   osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+  if (rampTo) {
+      osc.frequency.exponentialRampToValueAtTime(rampTo, audioCtx.currentTime + delay + duration);
+  }
   
   gain.gain.setValueAtTime(vol, audioCtx.currentTime + delay);
   gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + duration);
@@ -35,33 +38,53 @@ const playTone = (freq: number, type: OscillatorType, duration: number, vol = 0.
   osc.stop(audioCtx.currentTime + delay + duration);
 };
 
+const playNoise = (duration: number, vol: number) => {
+    if (isMuted || !audioCtx) return;
+    const bufferSize = audioCtx.sampleRate * duration;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    const gain = audioCtx.createGain();
+    
+    // Bandpass filter to make it sound like a hit
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1000;
+
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+    
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+    noise.start();
+};
+
 export const playSound = {
   click: () => {
-    // Sharp high tick
-    playTone(800, 'square', 0.05, 0.05);
+    // Crisper, high-pitched mechanical click
+    playTone(1200, 'sine', 0.05, 0.1);
+    playTone(2000, 'triangle', 0.02, 0.05, 0.01); 
   },
   hover: () => {
     // Subtle blip
     playTone(400, 'sine', 0.05, 0.02);
   },
   draw: () => {
-    // Swoosh effect (white noise simulation via rapid random frequencies or sliding sine)
+    // Smoother swoosh
     if (isMuted || !audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.frequency.setValueAtTime(200, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.1);
+    playTone(300, 'sine', 0.15, 0.05, 0, 800);
+    playNoise(0.1, 0.05); // Subtle friction noise
   },
   clash: () => {
-    // Low impact thud
-    playTone(100, 'sawtooth', 0.2, 0.2);
-    playTone(80, 'square', 0.2, 0.2, 0.05);
+    // Impactful thud + crash
+    playTone(150, 'square', 0.2, 0.3, 0, 50); // Punchy low end drop
+    playNoise(0.2, 0.2); // Impact noise
   },
   winRound: () => {
     // Major arpeggio
@@ -80,7 +103,7 @@ export const playSound = {
     playTone(205, 'triangle', 0.2, 0.1);
   },
   bgmStart: () => {
-     // Placeholder for start jingle
+     // Start jingle
      playTone(440, 'square', 0.1, 0.05);
      playTone(880, 'square', 0.4, 0.05, 0.1);
   }

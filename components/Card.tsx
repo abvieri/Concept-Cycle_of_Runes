@@ -1,7 +1,7 @@
 import React from 'react';
 import { CardData } from '../types';
 import { ELEMENT_STYLES, ELEMENT_ICONS } from '../constants';
-import { Shield } from 'lucide-react';
+import { Shield, Coins } from 'lucide-react';
 
 interface CardProps {
   card: CardData;
@@ -20,11 +20,19 @@ export const Card: React.FC<CardProps> = ({
   card, onClick, disabled, selected, hidden, mini,
   isClashing, isWinning, isLosing, reveal 
 }) => {
-  const style = ELEMENT_STYLES[card.element];
+  const isCoin = card.id === 'coin';
+  
+  // Custom Style for Coin or Standard Element Style
+  const style = isCoin ? {
+    bgColor: 'bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500',
+    patternColor: 'text-yellow-600',
+    accentColor: 'text-yellow-100',
+    textColor: 'text-amber-700'
+  } : ELEMENT_STYLES[card.element];
   
   // Animation Classes
   let animClass = '';
-  if (reveal) animClass = 'anim-enter';
+  if (reveal) animClass = isCoin ? 'anim-coin-flip' : 'anim-enter'; // Special entrance for coin
   if (isClashing) animClass = 'anim-clash'; 
   if (isWinning) animClass = 'z-50 scale-110 drop-shadow-[0_0_15px_rgba(255,255,255,0.6)]';
   if (isLosing) animClass = 'grayscale brightness-50 scale-95';
@@ -82,6 +90,9 @@ export const Card: React.FC<CardProps> = ({
                 flex items-center justify-center relative
                 overflow-hidden rounded-t-lg
             `}>
+                {/* Special Shine for Coin */}
+                {isCoin && <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite] pointer-events-none skew-x-12 -translate-x-full"></div>}
+
                 {/* Vector Pattern Background */}
                 <div className={`absolute -right-6 -top-6 opacity-20 ${style.patternColor}`}>
                     <svg width="100" height="100" viewBox="0 0 100 100">
@@ -96,7 +107,7 @@ export const Card: React.FC<CardProps> = ({
 
                 {/* Main Icon */}
                 <div className={`${style.accentColor} drop-shadow-md transform transition-transform group-hover:scale-110 duration-300 ${iconScale}`}>
-                    {ELEMENT_ICONS[card.element]}
+                    {isCoin ? <Coins size={32} strokeWidth={3} /> : ELEMENT_ICONS[card.element]}
                 </div>
             </div>
 
