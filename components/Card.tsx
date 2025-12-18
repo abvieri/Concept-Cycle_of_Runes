@@ -20,13 +20,13 @@ export const Card: React.FC<CardProps> = ({
   card, onClick, disabled, selected, hidden, mini,
   isClashing, isWinning, isLosing, reveal 
 }) => {
-  const isCoin = card.id === 'coin';
+  const isCoin = card.id.startsWith('coin') || card.isToken;
   
   // Custom Style for Coin or Standard Element Style
   const style = isCoin ? {
     bgColor: 'bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500',
     patternColor: 'text-yellow-600',
-    accentColor: 'text-yellow-100',
+    accentColor: 'text-yellow-900', // Darker text for visibility on gold
     textColor: 'text-amber-700'
   } : ELEMENT_STYLES[card.element];
   
@@ -105,9 +105,16 @@ export const Card: React.FC<CardProps> = ({
                     </svg>
                 </div>
 
-                {/* Main Icon */}
+                {/* Coin Badge Indicator (Top Right) */}
+                {isCoin && (
+                    <div className="absolute top-1 right-1 bg-yellow-600/20 rounded-full p-1 z-10">
+                        <Coins size={12} className="text-yellow-900 opacity-60" />
+                    </div>
+                )}
+
+                {/* Main Icon - ALWAYS SHOW THE ELEMENT ICON */}
                 <div className={`${style.accentColor} drop-shadow-md transform transition-transform group-hover:scale-110 duration-300 ${iconScale}`}>
-                    {isCoin ? <Coins size={32} strokeWidth={3} /> : ELEMENT_ICONS[card.element]}
+                    {ELEMENT_ICONS[card.element]}
                 </div>
             </div>
 

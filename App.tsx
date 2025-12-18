@@ -195,19 +195,25 @@ export default function App() {
         
         const result = calculateRoundOutcome(playerCard, enemyCard);
         
-        setTimeout(() => { setAnimState('clash'); playSound.clash(); }, 600);
+        // SLOWED DOWN TIMINGS FOR BETTER UX
+        setTimeout(() => { setAnimState('clash'); playSound.clash(); }, 800);  // Slight pause before clash
+        
         setTimeout(() => { 
             setRoundWinner(result); 
             setAnimState('impact'); 
             setShake(true); 
             setTimeout(() => setShake(false), 300);
-        }, 1200);
-        setTimeout(() => { applyResults(result); setAnimState('finished'); }, 2000);
+        }, 1600); // 1.6s for impact
+        
+        // Long pause to read "VICTORY" or "DEFEAT"
+        setTimeout(() => { applyResults(result); setAnimState('finished'); }, 3500); // 3.5s to see result text
+        
+        // Final cleanup
         setTimeout(() => { 
             setCombatPhase(CombatPhase.CLEANUP); 
             setAnimState('idle'); 
             setRoundWinner(null); 
-        }, 3500);
+        }, 6000); // 6s total before next round
     }
   }, [playerCard, enemyCard]);
 
@@ -216,11 +222,21 @@ export default function App() {
           if (checkVictory(player)) { setWinner(player); setPhase(GamePhase.GAME_OVER); }
           else if (checkVictory(enemy)) { setWinner(enemy); setPhase(GamePhase.GAME_OVER); }
           else {
+              // GENERATE COIN WITH RANDOM ELEMENT
               const draw = (p: PlayerState) => {
                   const deck = [...p.deck];
                   const hand = [...p.hand];
-                  if(deck.length > 0) hand.push(deck.pop()!);
-                  else hand.push({...COIN_CARD, id: Math.random().toString()});
+                  if(deck.length > 0) {
+                      hand.push(deck.pop()!);
+                  } else {
+                      // Random Element Coin
+                      const randomElement = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
+                      hand.push({
+                          ...COIN_CARD, 
+                          id: `coin-${Math.random()}`, 
+                          element: randomElement 
+                      });
+                  }
                   return {...p, deck, hand};
               };
               setPlayer(draw); setEnemy(draw);
@@ -290,19 +306,34 @@ export default function App() {
       
       // AI Logic
       const valid = enemy.hand.filter(c => calculateModifiedCost(c) <= enemy.energy);
-      const aiCard = valid.length > 0 ? valid[Math.floor(Math.random() * valid.length)] : COIN_CARD;
+      
+      // Enemy logic for Coin with random element
+      let aiCard: CardData;
+      if (valid.length > 0) {
+          aiCard = valid[Math.floor(Math.random() * valid.length)];
+      } else {
+           const randomElement = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
+           aiCard = { ...COIN_CARD, id: `coin-cpu-${Math.random()}`, element: randomElement };
+      }
       
       setEnemy(p => {
           const h = [...p.hand];
-          if (aiCard.id !== 'coin') h.splice(h.findIndex(c => c.id === aiCard.id), 1);
-          return {...p, hand: h, energy: p.energy - (aiCard.id === 'coin' ? 1 : calculateModifiedCost(aiCard))};
+          // Remove card from hand unless it's a generated coin
+          if (!aiCard.id.startsWith('coin')) {
+             const idx = h.findIndex(c => c.id === aiCard.id);
+             if (idx > -1) h.splice(idx, 1);
+          }
+          return {...p, hand: h, energy: p.energy - (aiCard.id.startsWith('coin') ? 1 : calculateModifiedCost(aiCard))};
       });
       setEnemyCard(aiCard);
 
       setPlayer(p => {
           const h = [...p.hand];
-          if (card.id !== 'coin') h.splice(h.findIndex(c => c.id === card.id), 1);
-          return {...p, hand: h, energy: p.energy - (card.id === 'coin' ? 1 : calculateModifiedCost(card))};
+          if (!card.id.startsWith('coin')) {
+             const idx = h.findIndex(c => c.id === card.id);
+             if (idx > -1) h.splice(idx, 1);
+          }
+          return {...p, hand: h, energy: p.energy - (card.id.startsWith('coin') ? 1 : calculateModifiedCost(card))};
       });
       setPlayerCard(card);
   };
@@ -589,7 +620,7 @@ export default function App() {
                        {/* Coin Button */}
                        {player.energy >= 1 && combatPhase === CombatPhase.PLANNING && (
                            <button 
-                                onClick={() => playPlayerCard(COIN_CARD)}
+                                onClick={() => playPlayerCard({...COIN_CARD, id: `coin-gen-${Math.random()}`, element: ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)]})}
                                 className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 border-2 border-yellow-200 shadow-lg flex items-center justify-center shrink-0 hover:scale-110 transition-transform group ml-2 relative overflow-hidden"
                            >
                                <div className="absolute inset-0 bg-white/30 skew-x-12 -translate-x-full group-hover:animate-[shimmer_1s_infinite] pointer-events-none"></div>
