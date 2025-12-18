@@ -21,7 +21,16 @@ const getRandomDeck = (): CardData[] => {
 };
 
 const createPlayer = (id: string, name: string, deck?: CardData[]): PlayerState => ({
-  id, name, health: 100, energy: 6, maxEnergy: 10, deck: deck || getRandomDeck(), hand: [], discard: [], runes: [],
+  id, 
+  name, 
+  health: 100, 
+  energy: 6, 
+  maxEnergy: 10, 
+  // IMPORTANT: Clone the deck array to ensure we don't mutate the draft options
+  deck: deck ? [...deck] : getRandomDeck(), 
+  hand: [], 
+  discard: [], 
+  runes: [],
 });
 
 // Helper to analyze a deck and find the dominant rune
@@ -104,6 +113,7 @@ export default function App() {
   const [phase, setPhase] = useState<GamePhase>(GamePhase.MENU);
   const [arenaEffect, setArenaEffect] = useState<ArenaEffect | null>(null);
   const [muted, setMuted] = useState(false);
+  const [showMenuTutorial, setShowMenuTutorial] = useState(false);
 
   const [player, setPlayer] = useState<PlayerState>(createPlayer('p1', 'Herói'));
   const [enemy, setEnemy] = useState<PlayerState>(createPlayer('cpu', 'Rival'));
@@ -213,7 +223,7 @@ export default function App() {
             setCombatPhase(CombatPhase.CLEANUP); 
             setAnimState('idle'); 
             setRoundWinner(null); 
-        }, 6000); // 6s total before next round
+        }, 5000); // 5s total -> 1.5s exposure (5000 - 3500)
     }
   }, [playerCard, enemyCard]);
 
@@ -229,7 +239,7 @@ export default function App() {
                   if(deck.length > 0) {
                       hand.push(deck.pop()!);
                   } else {
-                      // Random Element Coin
+                      // Recycle logic ensures deck is rarely empty, but as a fallback:
                       const randomElement = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
                       hand.push({
                           ...COIN_CARD, 
@@ -316,24 +326,48 @@ export default function App() {
            aiCard = { ...COIN_CARD, id: `coin-cpu-${Math.random()}`, element: randomElement };
       }
       
+      // UPDATE ENEMY
       setEnemy(p => {
           const h = [...p.hand];
-          // Remove card from hand unless it's a generated coin
+          const d = [...p.deck]; // Clone deck to modify it
+          
+          // Remove card from hand
           if (!aiCard.id.startsWith('coin')) {
              const idx = h.findIndex(c => c.id === aiCard.id);
              if (idx > -1) h.splice(idx, 1);
+             
+             // RECYCLE LOGIC: Add to bottom of deck (index 0 for a stack where pop() is used)
+             d.unshift(aiCard);
           }
-          return {...p, hand: h, energy: p.energy - (aiCard.id.startsWith('coin') ? 1 : calculateModifiedCost(aiCard))};
+          
+          return {
+              ...p, 
+              hand: h, 
+              deck: d,
+              energy: p.energy - (aiCard.id.startsWith('coin') ? 1 : calculateModifiedCost(aiCard))
+          };
       });
       setEnemyCard(aiCard);
 
+      // UPDATE PLAYER
       setPlayer(p => {
           const h = [...p.hand];
+          const d = [...p.deck]; // Clone deck
+          
           if (!card.id.startsWith('coin')) {
              const idx = h.findIndex(c => c.id === card.id);
              if (idx > -1) h.splice(idx, 1);
+             
+             // RECYCLE LOGIC: Add to bottom of deck (index 0 for a stack where pop() is used)
+             d.unshift(card);
           }
-          return {...p, hand: h, energy: p.energy - (card.id.startsWith('coin') ? 1 : calculateModifiedCost(card))};
+          
+          return {
+              ...p, 
+              hand: h, 
+              deck: d,
+              energy: p.energy - (card.id.startsWith('coin') ? 1 : calculateModifiedCost(card))
+          };
       });
       setPlayerCard(card);
   };
@@ -355,15 +389,58 @@ export default function App() {
   if (phase === GamePhase.MENU) return (
       <div className={`flex flex-col items-center justify-center h-screen text-white p-6 relative overflow-hidden ${bgStyle}`}>
           <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-          <div className="z-10 text-center space-y-6">
+          <div className="z-10 text-center space-y-6 flex flex-col items-center">
               <div className="mb-4 inline-block p-4 bg-white/10 backdrop-blur-md rounded-3xl shadow-[0_0_30px_rgba(20,184,166,0.2)] border border-teal-500/30 transform rotate-3">
                   <Swords size={64} className="text-teal-400" />
               </div>
               <h1 className="text-5xl font-black tracking-tight uppercase text-transparent bg-clip-text bg-gradient-to-br from-teal-200 to-emerald-400 drop-shadow-md">Cycle of Runes</h1>
-              <button onClick={startGame} className="bg-teal-600 text-white px-12 py-4 rounded-2xl font-black text-xl shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:scale-105 hover:bg-teal-500 transition-all border border-teal-400/50">
-                  INICIAR BATALHA
-              </button>
+              
+              <div className="flex flex-col gap-3 w-full max-w-xs">
+                  <button onClick={startGame} className="w-full bg-teal-600 text-white py-4 rounded-2xl font-black text-xl shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:scale-105 hover:bg-teal-500 transition-all border border-teal-400/50">
+                      INICIAR BATALHA
+                  </button>
+                  <button onClick={() => setShowMenuTutorial(true)} className="w-full bg-slate-800/50 text-teal-200/80 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 hover:text-white transition-all border border-white/5 hover:border-teal-500/30">
+                      COMO JOGAR
+                  </button>
+              </div>
           </div>
+
+          {/* Menu Tutorial Modal */}
+          {showMenuTutorial && (
+              <Modal title="Como Jogar" onClose={() => setShowMenuTutorial(false)}>
+                  <div className="space-y-2 mb-4">
+                       {helpChain.map((pair, i) => (
+                           <div key={i} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-2 border border-white/5">
+                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.w].bgColor} w-28 shadow-md`}>
+                                   {React.cloneElement(ELEMENT_ICONS[pair.w] as React.ReactElement<any>, { size: 14 })}
+                                   <span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.wName}</span>
+                               </div>
+                               <div className="flex flex-col items-center px-2">
+                                   <span className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Vence</span>
+                                   <ArrowRight size={14} className="text-slate-400" />
+                               </div>
+                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.l].bgColor} w-28 shadow-md`}>
+                                   {React.cloneElement(ELEMENT_ICONS[pair.l] as React.ReactElement<any>, { size: 14 })}
+                                   <span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.lName}</span>
+                               </div>
+                           </div>
+                       ))}
+                  </div>
+                  <div className="text-xs space-y-3 text-slate-300 border-t border-white/10 pt-3">
+                      <div className="flex gap-2 items-start">
+                          <div className="bg-white text-slate-900 font-bold px-1.5 rounded h-fit shrink-0">1</div>
+                          <p><strong>Custo de Energia:</strong> Número no topo esquerdo da carta. Você precisa ter essa energia para jogá-la.</p>
+                      </div>
+                      <div className="flex gap-2 items-start">
+                          <div className="bg-slate-700 text-white font-bold px-1.5 rounded h-fit shrink-0">5</div>
+                          <p><strong>Poder:</strong> Número no canto inferior. Define o vencedor em caso de empate elemental.</p>
+                      </div>
+                      <p>⚡ <strong>Recuperação:</strong> Ambos jogadores ganham <strong>+2 Energia</strong> ao fim de cada rodada (Máximo 10).</p>
+                      <p>⚔️ <strong>Combate:</strong> Elemento forte vence. Se o inimigo tiver vantagem, você só ganha se tiver o <strong>dobro</strong> de poder.</p>
+                      <p>💎 <strong>Vitória:</strong> Colete 3 runas iguais ou 5 diferentes.</p>
+                  </div>
+              </Modal>
+          )}
       </div>
   );
 
@@ -482,7 +559,7 @@ export default function App() {
                 <button onClick={() => setShowHelp(true)} className="p-2 bg-slate-900/80 rounded-full text-teal-200 border border-teal-500/30">
                     <HelpCircle size={16}/>
                 </button>
-                <button onClick={() => setMuted(!muted)} className="p-2 bg-slate-900/80 rounded-full text-teal-200 border border-teal-500/30">
+                <button onClick={() => setMuted(toggleMute())} className="p-2 bg-slate-900/80 rounded-full text-teal-200 border border-teal-500/30">
                     {muted ? <VolumeX size={16}/> : <Volume2 size={16}/>}
                 </button>
               </div>
@@ -599,11 +676,11 @@ export default function App() {
               </div>
 
               {/* Hand Scroller */}
-              <div className="relative w-full h-40 sm:h-44">
+              <div className="relative w-full h-48 sm:h-56">
                    <div className="absolute inset-y-0 left-0 w-8 z-10 bg-gradient-to-r from-slate-900 to-transparent pointer-events-none"></div>
                    <div className="absolute inset-y-0 right-0 w-8 z-10 bg-gradient-to-l from-slate-900 to-transparent pointer-events-none"></div>
                    
-                   <div className="flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar px-6 items-center h-full pb-2">
+                   <div className="flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar px-6 items-end h-full pb-4">
                        {player.hand.map(card => {
                            const cost = calculateModifiedCost(card);
                            const affordable = player.energy >= cost;
@@ -621,14 +698,14 @@ export default function App() {
                        {player.energy >= 1 && combatPhase === CombatPhase.PLANNING && (
                            <button 
                                 onClick={() => playPlayerCard({...COIN_CARD, id: `coin-gen-${Math.random()}`, element: ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)]})}
-                                className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 border-2 border-yellow-200 shadow-lg flex items-center justify-center shrink-0 hover:scale-110 transition-transform group ml-2 relative overflow-hidden"
+                                className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 border-2 border-yellow-200 shadow-lg flex items-center justify-center shrink-0 hover:scale-110 transition-transform group ml-2 relative overflow-hidden mb-6 sm:mb-8"
                            >
                                <div className="absolute inset-0 bg-white/30 skew-x-12 -translate-x-full group-hover:animate-[shimmer_1s_infinite] pointer-events-none"></div>
                                <Coins className="text-white drop-shadow-md group-hover:rotate-12 transition-transform relative z-10" size={24} />
                            </button>
                        )}
                        {player.energy < 1 && combatPhase === CombatPhase.PLANNING && (
-                            <button className="w-14 h-14 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center shrink-0 ml-2">
+                            <button className="w-14 h-14 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center shrink-0 ml-2 mb-6 sm:mb-8">
                                 <SkipForward className="text-slate-500" />
                             </button>
                        )}
@@ -663,6 +740,7 @@ export default function App() {
                        ))}
                   </div>
                   <p className="text-slate-400 mt-4 border-t border-white/10 pt-4"><strong>Regras Extras:</strong></p>
+                  <p>1. <strong>Energia:</strong> Recupera +2 por rodada (Máx 10).</p>
                   <p>2. <strong>Empate:</strong> Se não houver vantagem, vence a carta com maior Poder total.</p>
                   <p>3. <strong>Vantagem:</strong> Se você tiver vantagem elemental, você só perde se o inimigo tiver o <strong>dobro</strong> do seu poder.</p>
                   <p>4. <strong>Vitória:</strong> Colete 3 runas iguais ou 5 diferentes para vencer a partida.</p>
