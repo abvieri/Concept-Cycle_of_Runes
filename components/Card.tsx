@@ -51,7 +51,13 @@ export const Card: React.FC<CardProps> = ({
         flex items-center justify-center shadow-lg
         transition-all duration-300 shrink-0 relative overflow-hidden
       `}>
-         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+         {/* CSS Pattern instead of external image */}
+         <div className="absolute inset-0 opacity-10" 
+              style={{
+                backgroundImage: 'radial-gradient(#4cc9f0 1px, transparent 1px)', 
+                backgroundSize: '10px 10px'
+              }}
+         ></div>
          <div className="w-8 h-8 rounded-full border-2 border-[#3b4657] bg-[#31394a] flex items-center justify-center relative z-10">
             <div className="w-3 h-3 rounded-full bg-[#4cc9f0] animate-pulse"></div>
          </div>
@@ -93,7 +99,7 @@ export const Card: React.FC<CardProps> = ({
                 {/* Special Shine for Coin */}
                 {isCoin && <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite] pointer-events-none skew-x-12 -translate-x-full"></div>}
 
-                {/* Vector Pattern Background */}
+                {/* Vector Pattern Background (SVG Inline) */}
                 <div className={`absolute -right-6 -top-6 opacity-20 ${style.patternColor}`}>
                     <svg width="100" height="100" viewBox="0 0 100 100">
                         <circle cx="50" cy="50" r="45" fill="currentColor"/>

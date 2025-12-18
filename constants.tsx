@@ -1,4 +1,4 @@
-import { ElementType, CardData, ArenaEffect } from './types';
+import { ElementType, CardData, ArenaEffect, AbilityType } from './types';
 import { Flame, Mountain, Zap, Wind, Droplets } from 'lucide-react';
 import React from 'react';
 
@@ -68,11 +68,12 @@ export const ELEMENT_ADVANTAGE: Record<ElementType, ElementType> = {
 };
 
 // Simplified Pool (Translated Full Names)
+// Added Abilities to Tier 3/4 Cards
 export const CARD_POOL: CardData[] = [
   // FOGO
   { id: 'f1', name: 'Chama Viva', element: ElementType.FIRE, power: 1, cost: 1 },
   { id: 'f2', name: 'Brasa Ardente', element: ElementType.FIRE, power: 3, cost: 2 },
-  { id: 'f3', name: 'Labareda Furiosa', element: ElementType.FIRE, power: 5, cost: 3 },
+  { id: 'f3', name: 'Labareda Furiosa', element: ElementType.FIRE, power: 5, cost: 3, ability: AbilityType.CHARGE },
   { id: 'f4', name: 'Magma Derretido', element: ElementType.FIRE, power: 6, cost: 4 },
   { id: 'f5', name: 'Inferno Solar', element: ElementType.FIRE, power: 9, cost: 6 },
   // TERRA
@@ -83,20 +84,20 @@ export const CARD_POOL: CardData[] = [
   { id: 'e5', name: 'Gaia Mãe', element: ElementType.EARTH, power: 9, cost: 6 },
   // RAIO
   { id: 'l1', name: 'Faísca Veloz', element: ElementType.LIGHTNING, power: 1, cost: 1 },
-  { id: 'l2', name: 'Raio Cortante', element: ElementType.LIGHTNING, power: 3, cost: 2 },
-  { id: 'l3', name: 'Volts Mortais', element: ElementType.LIGHTNING, power: 5, cost: 3 },
+  { id: 'l2', name: 'Raio Cortante', element: ElementType.LIGHTNING, power: 3, cost: 2, ability: AbilityType.CHARGE },
+  { id: 'l3', name: 'Volts Mortais', element: ElementType.LIGHTNING, power: 5, cost: 3, ability: AbilityType.CHARGE },
   { id: 'l4', name: 'Trovão Real', element: ElementType.LIGHTNING, power: 8, cost: 6 }, 
   { id: 'l5', name: 'Tormenta Final', element: ElementType.LIGHTNING, power: 9, cost: 6 },
   // AR
   { id: 'a1', name: 'Sopro Suave', element: ElementType.AIR, power: 1, cost: 1 },
-  { id: 'a2', name: 'Brisa Leve', element: ElementType.AIR, power: 3, cost: 2 },
-  { id: 'a3', name: 'Vendaval Forte', element: ElementType.AIR, power: 5, cost: 3 },
+  { id: 'a2', name: 'Brisa Leve', element: ElementType.AIR, power: 3, cost: 2, ability: AbilityType.DRAW },
+  { id: 'a3', name: 'Vendaval Forte', element: ElementType.AIR, power: 5, cost: 3, ability: AbilityType.DRAW },
   { id: 'a4', name: 'Ciclone Maior', element: ElementType.AIR, power: 6, cost: 4 },
   { id: 'a5', name: 'Zéfiro Divino', element: ElementType.AIR, power: 9, cost: 6 },
   // ÁGUA
   { id: 'w1', name: 'Gota Pura', element: ElementType.WATER, power: 1, cost: 1 },
-  { id: 'w2', name: 'Névoa Densa', element: ElementType.WATER, power: 3, cost: 2 },
-  { id: 'w3', name: 'Maré Cheia', element: ElementType.WATER, power: 5, cost: 3 },
+  { id: 'w2', name: 'Névoa Densa', element: ElementType.WATER, power: 3, cost: 2, ability: AbilityType.DRAW },
+  { id: 'w3', name: 'Maré Cheia', element: ElementType.WATER, power: 5, cost: 3, ability: AbilityType.DRAW },
   { id: 'w4', name: 'Onda Gigante', element: ElementType.WATER, power: 6, cost: 4 },
   { id: 'w5', name: 'Abismo Azul', element: ElementType.WATER, power: 9, cost: 6 },
 ];

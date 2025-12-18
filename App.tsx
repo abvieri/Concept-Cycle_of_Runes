@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ElementType, GamePhase, PlayerState, CardData, CombatPhase, ArenaEffect } from './types';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { ElementType, GamePhase, PlayerState, CardData, CombatPhase, ArenaEffect, AbilityType } from './types';
 import { ELEMENTS, CARD_POOL, ELEMENT_ADVANTAGE, ELEMENT_STYLES, ELEMENT_ICONS, ARENA_EFFECTS, COIN_CARD } from './constants';
 import { Card } from './components/Card';
 import { initAudio, playSound, toggleMute } from './audio';
-import { RotateCw, Trophy, Skull, Coins, Zap, Volume2, VolumeX, SkipForward, Swords, Gem, Shield, HelpCircle, X, Info, ArrowRight } from 'lucide-react';
+import { RotateCw, Trophy, Skull, Coins, Zap, Volume2, VolumeX, SkipForward, Swords, Gem, Shield, HelpCircle, X, Info, ArrowRight, Stars } from 'lucide-react';
 
 // --- Utils ---
 const shuffle = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
@@ -33,7 +33,6 @@ const createPlayer = (id: string, name: string, deck?: CardData[]): PlayerState 
   runes: [],
 });
 
-// Helper to analyze a deck and find the dominant rune
 const getDominantRune = (deck: CardData[]): { rune: ElementType, count: number } => {
     const counts: Record<string, number> = {};
     deck.forEach(c => {
@@ -62,7 +61,6 @@ const RuneTracker = ({ runes, alignRight = false }: { runes: ElementType[], alig
                 
                 return (
                     <div key={elem} className="flex flex-col items-center justify-between h-full group relative">
-                        {/* Dots Counter */}
                         <div className="flex space-x-[1px] mb-1 h-1 items-end justify-center">
                             {[1, 2, 3].map(i => (
                                 <div 
@@ -77,8 +75,6 @@ const RuneTracker = ({ runes, alignRight = false }: { runes: ElementType[], alig
                                 />
                             ))}
                         </div>
-                        
-                        {/* Element Icon Badge */}
                         <div className={`
                             w-5 h-5 rounded-lg flex items-center justify-center transition-all duration-300
                             ${count > 0 ? `${style.bgColor} text-white shadow-md` : 'bg-slate-800 text-slate-600 grayscale opacity-50'}
@@ -92,6 +88,161 @@ const RuneTracker = ({ runes, alignRight = false }: { runes: ElementType[], alig
         </div>
     );
 };
+
+// Atmosphere removed as requested
+
+// --- Enhanced Combat VFX Component ---
+const CombatVFX = ({ 
+    animState, 
+    roundWinner,
+    winnerElement, 
+    winnerPower, 
+    playerElement, 
+    playerPower, 
+    enemyElement, 
+    enemyPower,
+    abilityVfx
+}: { 
+    animState: string;
+    roundWinner: 'player' | 'enemy' | 'tie' | null;
+    winnerElement: ElementType | 'COIN' | null;
+    winnerPower: number;
+    playerElement: ElementType | 'COIN' | null;
+    playerPower: number;
+    enemyElement: ElementType | 'COIN' | null;
+    enemyPower: number;
+    abilityVfx: { type: AbilityType, target: 'player' | 'enemy' } | null;
+}) => {
+  
+  const getColorClass = (el: ElementType | 'COIN' | null) => {
+      if (!el) return '';
+      if (el === 'COIN') return 'vfx-coin-color';
+      switch(el) {
+          case ElementType.FIRE: return 'vfx-fire-color';
+          case ElementType.WATER: return 'vfx-water-color';
+          case ElementType.EARTH: return 'vfx-earth-color';
+          case ElementType.LIGHTNING: return 'vfx-lightning-color';
+          case ElementType.AIR: return 'vfx-air-color';
+          default: return '';
+      }
+  };
+
+  // ABILITY VFX PHASE - REMOVED VISUALS AS REQUESTED
+  if (abilityVfx) {
+      return null; // Logic runs, but no overlay "sonar" effect
+  }
+
+  // 1. CLASH PHASE (Centered Alignment)
+  if (animState === 'clash') {
+      const pScale = 0.8 + (playerPower / 10);
+      const eScale = 0.8 + (enemyPower / 10);
+
+      return (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[60]">
+             {/* Swirls are now absolutely centered and rotate around the gap */}
+             <div className={`vfx-clash-swirl ${getColorClass(playerElement)}`} style={{ transform: `translate(-50%, -50%) scale(${pScale})` }}></div>
+             <div className={`vfx-clash-swirl ${getColorClass(enemyElement)}`} style={{ transform: `translate(-50%, -50%) scale(${eScale}) rotate(180deg)`, animationDirection: 'reverse' }}></div>
+             
+             {/* Center Sparks */}
+             <div className="absolute w-12 h-12 bg-white rounded-full blur-xl animate-pulse mix-blend-overlay"></div>
+        </div>
+      );
+  }
+
+  // 2. IMPACT PHASE (Directional Attacks)
+  if (animState === 'impact' && winnerElement && roundWinner && roundWinner !== 'tie') {
+      const isPlayerWin = roundWinner === 'player';
+      
+      // Coordinates relative to center (0,0)
+      const startY = isPlayerWin ? '60px' : '-60px';
+      const endY = isPlayerWin ? '-90px' : '90px';
+      const origin = isPlayerWin ? 'bottom' : 'top';
+      const dist = '150px'; // Approx distance
+
+      const styleVars = { '--start-y': startY, '--end-y': endY, '--origin': origin, '--dist': dist } as React.CSSProperties;
+      
+      return (
+        <div className="absolute inset-0 pointer-events-none z-[70]">
+          
+          {/* --- ATTACK PROJECTILES --- */}
+
+          {winnerElement === ElementType.LIGHTNING && (
+             <>
+                <div className="attack-lightning" style={{ 
+                    // If player wins, we target the enemy (Top).
+                    // If enemy wins, we target the player (Bottom).
+                    top: isPlayerWin ? '0' : 'auto', 
+                    bottom: isPlayerWin ? 'auto' : '0', 
+                    height: '50%', 
+                    // Rotate 180 if hitting the top so it looks like it shoots Upwards
+                    transform: isPlayerWin ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)' 
+                }}></div>
+                <div className="attack-lightning" style={{ 
+                    top: isPlayerWin ? '0' : 'auto', 
+                    bottom: isPlayerWin ? 'auto' : '0', 
+                    height: '50%', 
+                    animationDelay: '0.1s', 
+                    transform: isPlayerWin ? 'translateX(-60%) rotate(185deg)' : 'translateX(-60%) rotate(5deg)' 
+                }}></div>
+                <div className="attack-lightning" style={{ 
+                    top: isPlayerWin ? '0' : 'auto', 
+                    bottom: isPlayerWin ? 'auto' : '0', 
+                    height: '50%', 
+                    animationDelay: '0.2s', 
+                    transform: isPlayerWin ? 'translateX(-40%) rotate(175deg)' : 'translateX(-40%) rotate(-5deg)' 
+                }}></div>
+             </>
+          )}
+
+          {winnerElement === ElementType.FIRE && (
+             <div className="attack-fireball" style={styleVars}></div>
+          )}
+
+          {winnerElement === ElementType.WATER && (
+             <div className="attack-water" style={{ top: isPlayerWin ? 'auto' : '50%', bottom: isPlayerWin ? '50%' : 'auto', ...styleVars }}></div>
+          )}
+
+          {winnerElement === ElementType.EARTH && (
+             <>
+                <div className="attack-leaf" style={{ ...styleVars, '--offset-x': '-15px' } as React.CSSProperties}></div>
+                <div className="attack-leaf" style={{ ...styleVars, '--offset-x': '15px', animationDelay: '0.1s' } as React.CSSProperties}></div>
+                <div className="attack-leaf" style={{ ...styleVars, '--offset-x': '0px', animationDelay: '0.05s' } as React.CSSProperties}></div>
+             </>
+          )}
+
+          {winnerElement === ElementType.AIR && (
+             <>
+                 <div className="attack-air" style={styleVars}></div>
+                 <div className="attack-air" style={{...styleVars, animationDelay: '0.1s'}}></div>
+             </>
+          )}
+           
+          {(winnerElement === 'COIN') && <div className="attack-fireball" style={{ ...styleVars, background: '#facc15' }}></div>}
+
+
+          {/* --- IMPACT ON TARGET --- */}
+          <div className="absolute top-1/2 left-1/2 w-0 h-0" style={{ transform: `translate(0, ${endY})` }}>
+              <div className={`impact-burst ${getColorClass(winnerElement)} opacity-50 bg-current blur-md`}></div>
+              
+              {/* Element Specific Impact Details */}
+              {winnerElement === ElementType.WATER && <div className="burst-water w-24 h-24 absolute -translate-x-1/2 -translate-y-1/2"></div>}
+              {winnerElement === ElementType.LIGHTNING && <div className="absolute -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-white blur-xl opacity-80 animate-pulse"></div>}
+          </div>
+
+        </div>
+      );
+  }
+
+  // Fallback for tie impact (generic clash in center)
+  if (animState === 'impact' && roundWinner === 'tie') {
+      return <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[70]">
+          <div className="w-20 h-20 bg-white rounded-full blur-xl animate-ping"></div>
+      </div>;
+  }
+
+  return null;
+};
+
 
 // --- Modals ---
 
@@ -128,12 +279,16 @@ export default function App() {
   const [animState, setAnimState] = useState<'idle' | 'reveal' | 'clash' | 'impact' | 'finished'>('idle');
   const [roundWinner, setRoundWinner] = useState<'player' | 'enemy' | 'tie' | null>(null);
   const [shake, setShake] = useState(false);
+  const [abilityVfx, setAbilityVfx] = useState<{ type: AbilityType, target: 'player' | 'enemy' } | null>(null);
 
   // Modals
   const [showHelp, setShowHelp] = useState(false);
   const [showArenaInfo, setShowArenaInfo] = useState(false);
   // Roulette
   const [rouletteIndex, setRouletteIndex] = useState(0);
+
+  // Scroll Ref for Hand
+  const handScrollRef = useRef<HTMLDivElement>(null);
 
   // --- Logic ---
   const calculateModifiedCost = useCallback((card: CardData): number => {
@@ -196,7 +351,45 @@ export default function App() {
       }
   };
 
+  // --- Ability Logic ---
+  const applyAbility = (ability: AbilityType, target: 'player' | 'enemy') => {
+      const setState = target === 'player' ? setPlayer : setEnemy;
+      
+      setState(p => {
+          let newState = {...p};
+          
+          if (ability === AbilityType.CHARGE) {
+              newState.energy = Math.min(newState.maxEnergy, newState.energy + 2);
+          } else if (ability === AbilityType.DRAW) {
+              const newDeck = [...p.deck];
+              const newHand = [...p.hand];
+              if (newDeck.length > 0) {
+                  newHand.push(newDeck.pop()!);
+              }
+              newState.deck = newDeck;
+              newState.hand = newHand;
+          }
+          
+          return newState;
+      });
+  };
+
   // --- Effects ---
+  
+  // Hand Scroll Effect
+  useEffect(() => {
+      const el = handScrollRef.current;
+      if (el) {
+          const onWheel = (e: WheelEvent) => {
+              if (e.deltaY === 0) return;
+              e.preventDefault();
+              el.scrollLeft += e.deltaY;
+          };
+          el.addEventListener('wheel', onWheel, { passive: false });
+          return () => el.removeEventListener('wheel', onWheel);
+      }
+  }, [phase]); // Re-bind on phase change just in case (e.g. going back to menu and returning)
+
   useEffect(() => {
     if (playerCard && enemyCard && combatPhase === CombatPhase.PLANNING) {
         setCombatPhase(CombatPhase.RESOLUTION);
@@ -205,25 +398,61 @@ export default function App() {
         
         const result = calculateRoundOutcome(playerCard, enemyCard);
         
-        // SLOWED DOWN TIMINGS FOR BETTER UX
-        setTimeout(() => { setAnimState('clash'); playSound.clash(); }, 800);  // Slight pause before clash
+        // 1. Ability Trigger Phase (After Reveal, Before Clash)
+        setTimeout(() => {
+            let hasAbility = false;
+            if (playerCard.ability) {
+                setAbilityVfx({ type: playerCard.ability, target: 'player' });
+                applyAbility(playerCard.ability, 'player');
+                playSound.ability(playerCard.ability);
+                hasAbility = true;
+            }
+            if (enemyCard.ability) {
+                if (!playerCard.ability) {
+                    setAbilityVfx({ type: enemyCard.ability, target: 'enemy' });
+                    playSound.ability(enemyCard.ability);
+                } else {
+                    applyAbility(enemyCard.ability, 'enemy');
+                }
+            }
+        }, 500);
+
+        // 2. Clash Phase
+        setTimeout(() => { 
+            setAbilityVfx(null); // Clear ability VFX
+            setAnimState('clash'); 
+            playSound.clash(); 
+        }, 1200);
         
+        // 3. Impact Phase
         setTimeout(() => { 
             setRoundWinner(result); 
             setAnimState('impact'); 
             setShake(true); 
+            
+            // PLAY ELEMENTAL SOUND ON IMPACT
+            if (result === 'player') {
+                const el = playerCard.isToken ? 'COIN' : playerCard.element;
+                playSound.elementImpact(el, calculateModifiedPower(playerCard));
+            } else if (result === 'enemy') {
+                const el = enemyCard.isToken ? 'COIN' : enemyCard.element;
+                playSound.elementImpact(el, calculateModifiedPower(enemyCard));
+            } else {
+                playSound.elementImpact('EARTH', 3); 
+            }
+
             setTimeout(() => setShake(false), 300);
-        }, 1600); // 1.6s for impact
+        }, 1800); 
         
-        // Long pause to read "VICTORY" or "DEFEAT"
-        setTimeout(() => { applyResults(result); setAnimState('finished'); }, 3500); // 3.5s to see result text
+        // 4. Result Text
+        setTimeout(() => { applyResults(result); setAnimState('finished'); }, 2600); 
         
-        // Final cleanup
+        // 5. Cleanup
         setTimeout(() => { 
             setCombatPhase(CombatPhase.CLEANUP); 
             setAnimState('idle'); 
             setRoundWinner(null); 
-        }, 5000); // 5s total -> 1.5s exposure (5000 - 3500)
+        }, 3800); 
     }
   }, [playerCard, enemyCard]);
 
@@ -232,14 +461,12 @@ export default function App() {
           if (checkVictory(player)) { setWinner(player); setPhase(GamePhase.GAME_OVER); }
           else if (checkVictory(enemy)) { setWinner(enemy); setPhase(GamePhase.GAME_OVER); }
           else {
-              // GENERATE COIN WITH RANDOM ELEMENT
               const draw = (p: PlayerState) => {
                   const deck = [...p.deck];
                   const hand = [...p.hand];
                   if(deck.length > 0) {
                       hand.push(deck.pop()!);
                   } else {
-                      // Recycle logic ensures deck is rarely empty, but as a fallback:
                       const randomElement = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
                       hand.push({
                           ...COIN_CARD, 
@@ -263,21 +490,14 @@ export default function App() {
             setRouletteIndex(prev => (prev + 1) % ARENA_EFFECTS.length);
         }, 100);
         
-        // Stop roulette after 2 seconds
         const timeout = setTimeout(() => {
             clearInterval(interval);
             const selected = ARENA_EFFECTS[Math.floor(Math.random() * ARENA_EFFECTS.length)];
             setArenaEffect(selected);
             setRouletteIndex(ARENA_EFFECTS.findIndex(e => e.id === selected.id));
-            
-            // Prepare draft decks
             setDraftOptions([getRandomDeck(), getRandomDeck(), getRandomDeck()]);
-            
-            setTimeout(() => {
-                setPhase(GamePhase.DECK_SELECTION);
-            }, 1000);
+            setTimeout(() => setPhase(GamePhase.DECK_SELECTION), 1000);
         }, 2000);
-        
         return () => { clearInterval(interval); clearTimeout(timeout); };
     }
   }, [phase]);
@@ -285,12 +505,12 @@ export default function App() {
 
   // --- Interactions ---
   const startGame = () => {
-      initAudio(); playSound.bgmStart();
+      initAudio();
+      playSound.bgmStart();
       setPhase(GamePhase.ROULETTE);
   };
 
   const selectDeck = (deck: CardData[]) => {
-      // RESET COMBAT STATE
       setPlayerCard(null);
       setEnemyCard(null);
       setCombatPhase(CombatPhase.PLANNING);
@@ -299,8 +519,7 @@ export default function App() {
       setRoundWinner(null);
       
       const p1 = createPlayer('p1', 'Herói', deck);
-      const cpu = createPlayer('cpu', 'Rival'); // CPU gets random
-      // Draw 5
+      const cpu = createPlayer('cpu', 'Rival');
       for(let i=0; i<5; i++) { 
           if(p1.deck.length > 0) p1.hand.push(p1.deck.pop()!); 
           if(cpu.deck.length > 0) cpu.hand.push(cpu.deck.pop()!); 
@@ -313,11 +532,7 @@ export default function App() {
       if (combatPhase !== CombatPhase.PLANNING || player.energy < calculateModifiedCost(card)) return;
       
       playSound.click();
-      
-      // AI Logic
       const valid = enemy.hand.filter(c => calculateModifiedCost(c) <= enemy.energy);
-      
-      // Enemy logic for Coin with random element
       let aiCard: CardData;
       if (valid.length > 0) {
           aiCard = valid[Math.floor(Math.random() * valid.length)];
@@ -326,20 +541,14 @@ export default function App() {
            aiCard = { ...COIN_CARD, id: `coin-cpu-${Math.random()}`, element: randomElement };
       }
       
-      // UPDATE ENEMY
       setEnemy(p => {
           const h = [...p.hand];
-          const d = [...p.deck]; // Clone deck to modify it
-          
-          // Remove card from hand
+          const d = [...p.deck];
           if (!aiCard.id.startsWith('coin')) {
              const idx = h.findIndex(c => c.id === aiCard.id);
              if (idx > -1) h.splice(idx, 1);
-             
-             // RECYCLE LOGIC: Add to bottom of deck (index 0 for a stack where pop() is used)
              d.unshift(aiCard);
           }
-          
           return {
               ...p, 
               hand: h, 
@@ -349,19 +558,14 @@ export default function App() {
       });
       setEnemyCard(aiCard);
 
-      // UPDATE PLAYER
       setPlayer(p => {
           const h = [...p.hand];
-          const d = [...p.deck]; // Clone deck
-          
+          const d = [...p.deck];
           if (!card.id.startsWith('coin')) {
              const idx = h.findIndex(c => c.id === card.id);
              if (idx > -1) h.splice(idx, 1);
-             
-             // RECYCLE LOGIC: Add to bottom of deck (index 0 for a stack where pop() is used)
              d.unshift(card);
           }
-          
           return {
               ...p, 
               hand: h, 
@@ -372,10 +576,26 @@ export default function App() {
       setPlayerCard(card);
   };
 
-  // --- Magical Background shared style ---
   const bgStyle = "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-900/40 via-slate-900 to-slate-950";
 
-  // Help Visual Data Structure
+  const winnerElement: ElementType | 'COIN' | null = useMemo(() => {
+    if (!roundWinner || !playerCard || !enemyCard) return null;
+    const card = roundWinner === 'player' ? playerCard : enemyCard;
+    return card.isToken ? 'COIN' : card.element;
+  }, [roundWinner, playerCard, enemyCard]);
+  
+  const winnerPower = useMemo(() => {
+    if (!roundWinner || !playerCard || !enemyCard) return 0;
+    const card = roundWinner === 'player' ? playerCard : enemyCard;
+    return calculateModifiedPower(card);
+  }, [roundWinner, playerCard, enemyCard]);
+
+  const playerClashEl = playerCard ? (playerCard.isToken ? 'COIN' : playerCard.element) : null;
+  const playerClashPow = playerCard ? calculateModifiedPower(playerCard) : 0;
+  const enemyClashEl = enemyCard ? (enemyCard.isToken ? 'COIN' : enemyCard.element) : null;
+  const enemyClashPow = enemyCard ? calculateModifiedPower(enemyCard) : 0;
+
+
   const helpChain = [
       { w: ElementType.FIRE, l: ElementType.EARTH, wName: 'FOGO', lName: 'TERRA' },
       { w: ElementType.EARTH, l: ElementType.LIGHTNING, wName: 'TERRA', lName: 'RAIO' },
@@ -384,58 +604,35 @@ export default function App() {
       { w: ElementType.WATER, l: ElementType.FIRE, wName: 'ÁGUA', lName: 'FOGO' },
   ];
 
-  // --- Screens ---
-
   if (phase === GamePhase.MENU) return (
-      <div className={`flex flex-col items-center justify-center h-screen text-white p-6 relative overflow-hidden ${bgStyle}`}>
-          <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+      <div className={`flex flex-col items-center justify-center h-screen text-white p-6 relative overflow-hidden bg-slate-950`}>
+          <div className="absolute inset-0 opacity-5" 
+               style={{backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
+          </div>
+
           <div className="z-10 text-center space-y-6 flex flex-col items-center">
               <div className="mb-4 inline-block p-4 bg-white/10 backdrop-blur-md rounded-3xl shadow-[0_0_30px_rgba(20,184,166,0.2)] border border-teal-500/30 transform rotate-3">
                   <Swords size={64} className="text-teal-400" />
               </div>
               <h1 className="text-5xl font-black tracking-tight uppercase text-transparent bg-clip-text bg-gradient-to-br from-teal-200 to-emerald-400 drop-shadow-md">Cycle of Runes</h1>
-              
               <div className="flex flex-col gap-3 w-full max-w-xs">
-                  <button onClick={startGame} className="w-full bg-teal-600 text-white py-4 rounded-2xl font-black text-xl shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:scale-105 hover:bg-teal-500 transition-all border border-teal-400/50">
-                      INICIAR BATALHA
-                  </button>
-                  <button onClick={() => setShowMenuTutorial(true)} className="w-full bg-slate-800/50 text-teal-200/80 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 hover:text-white transition-all border border-white/5 hover:border-teal-500/30">
-                      COMO JOGAR
-                  </button>
+                  <button onClick={startGame} className="w-full bg-teal-600 text-white py-4 rounded-2xl font-black text-xl shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:scale-105 hover:bg-teal-500 transition-all border border-teal-400/50">INICIAR BATALHA</button>
+                  <button onClick={() => setShowMenuTutorial(true)} className="w-full bg-slate-800/50 text-teal-200/80 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 hover:text-white transition-all border border-white/5 hover:border-teal-500/30">COMO JOGAR</button>
               </div>
           </div>
-
-          {/* Menu Tutorial Modal */}
           {showMenuTutorial && (
               <Modal title="Como Jogar" onClose={() => setShowMenuTutorial(false)}>
                   <div className="space-y-2 mb-4">
                        {helpChain.map((pair, i) => (
                            <div key={i} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-2 border border-white/5">
-                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.w].bgColor} w-28 shadow-md`}>
-                                   {React.cloneElement(ELEMENT_ICONS[pair.w] as React.ReactElement<any>, { size: 14 })}
-                                   <span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.wName}</span>
-                               </div>
-                               <div className="flex flex-col items-center px-2">
-                                   <span className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Vence</span>
-                                   <ArrowRight size={14} className="text-slate-400" />
-                               </div>
-                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.l].bgColor} w-28 shadow-md`}>
-                                   {React.cloneElement(ELEMENT_ICONS[pair.l] as React.ReactElement<any>, { size: 14 })}
-                                   <span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.lName}</span>
-                               </div>
+                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.w].bgColor} w-28 shadow-md`}>{React.cloneElement(ELEMENT_ICONS[pair.w] as React.ReactElement<any>, { size: 14 })}<span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.wName}</span></div>
+                               <div className="flex flex-col items-center px-2"><span className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Vence</span><ArrowRight size={14} className="text-slate-400" /></div>
+                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.l].bgColor} w-28 shadow-md`}>{React.cloneElement(ELEMENT_ICONS[pair.l] as React.ReactElement<any>, { size: 14 })}<span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.lName}</span></div>
                            </div>
                        ))}
                   </div>
                   <div className="text-xs space-y-3 text-slate-300 border-t border-white/10 pt-3">
-                      <div className="flex gap-2 items-start">
-                          <div className="bg-white text-slate-900 font-bold px-1.5 rounded h-fit shrink-0">1</div>
-                          <p><strong>Custo de Energia:</strong> Número no topo esquerdo da carta. Você precisa ter essa energia para jogá-la.</p>
-                      </div>
-                      <div className="flex gap-2 items-start">
-                          <div className="bg-slate-700 text-white font-bold px-1.5 rounded h-fit shrink-0">5</div>
-                          <p><strong>Poder:</strong> Número no canto inferior. Define o vencedor em caso de empate elemental.</p>
-                      </div>
-                      <p>⚡ <strong>Recuperação:</strong> Ambos jogadores ganham <strong>+2 Energia</strong> ao fim de cada rodada (Máximo 10).</p>
+                      <p>✨ <strong>Habilidades:</strong> Cartas raras podem ativar efeitos como <strong>Compra</strong> ou <strong>Carga</strong>.</p>
                       <p>⚔️ <strong>Combate:</strong> Elemento forte vence. Se o inimigo tiver vantagem, você só ganha se tiver o <strong>dobro</strong> de poder.</p>
                       <p>💎 <strong>Vitória:</strong> Colete 3 runas iguais ou 5 diferentes.</p>
                   </div>
@@ -448,16 +645,10 @@ export default function App() {
       <div className={`flex flex-col items-center justify-center h-screen text-white ${bgStyle}`}>
           <div className="relative mb-8">
               <div className="absolute inset-0 bg-teal-500/20 blur-xl rounded-full"></div>
-              {/* Roulette Visual */}
               <div className="w-32 h-32 relative flex items-center justify-center bg-slate-800 rounded-full border-4 border-slate-600 shadow-2xl overflow-hidden">
                    {ARENA_EFFECTS.map((effect, idx) => (
-                       <div 
-                         key={effect.id} 
-                         className={`absolute w-full h-full flex items-center justify-center transition-opacity duration-100 ${rouletteIndex === idx ? 'opacity-100' : 'opacity-0'}`}
-                       >
-                           <div className={`w-full h-full ${ELEMENT_STYLES[effect.element].bgColor} flex items-center justify-center`}>
-                               {ELEMENT_ICONS[effect.element]}
-                           </div>
+                       <div key={effect.id} className={`absolute w-full h-full flex items-center justify-center transition-opacity duration-100 ${rouletteIndex === idx ? 'opacity-100' : 'opacity-0'}`}>
+                           <div className={`w-full h-full ${ELEMENT_STYLES[effect.element].bgColor} flex items-center justify-center`}>{ELEMENT_ICONS[effect.element]}</div>
                        </div>
                    ))}
               </div>
@@ -468,59 +659,30 @@ export default function App() {
   );
 
   if (phase === GamePhase.DECK_SELECTION) return (
-      <div className={`flex flex-col items-center justify-center h-screen w-full px-4 text-white ${bgStyle}`}>
-          <div className="flex flex-col items-center gap-2 mb-6 w-full max-w-4xl">
+      <div className={`flex flex-col items-center justify-center h-screen w-full px-4 text-white ${bgStyle} relative overflow-hidden`}>
+          
+          <div className="flex flex-col items-center gap-2 mb-6 w-full max-w-4xl z-10">
               <h2 className="text-2xl font-black text-teal-100 mb-2">ESCOLHA SEU GRIMÓRIO</h2>
-              {/* Active Arena Banner */}
               {arenaEffect && (
                   <div className="flex items-center gap-3 bg-slate-900/80 border border-teal-500/30 px-4 py-2 rounded-xl backdrop-blur-md animate-in slide-in-from-top-4 shadow-lg w-full max-w-md justify-start sm:justify-center">
-                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center ${ELEMENT_STYLES[arenaEffect.element].bgColor} text-white shadow-md`}>
-                          {ELEMENT_ICONS[arenaEffect.element]}
-                      </div>
-                       <div className="text-left">
-                          <div className="text-[10px] text-teal-300 font-bold uppercase tracking-wider">Efeito de Arena Ativo</div>
-                          <div className="text-sm font-bold text-white leading-tight">{arenaEffect.name}: <span className="font-normal opacity-80">{arenaEffect.description}</span></div>
-                      </div>
+                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center ${ELEMENT_STYLES[arenaEffect.element].bgColor} text-white shadow-md`}>{ELEMENT_ICONS[arenaEffect.element]}</div>
+                       <div className="text-left"><div className="text-[10px] text-teal-300 font-bold uppercase tracking-wider">Efeito de Arena Ativo</div><div className="text-sm font-bold text-white leading-tight">{arenaEffect.name}: <span className="font-normal opacity-80">{arenaEffect.description}</span></div></div>
                   </div>
               )}
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl overflow-y-auto max-h-[60vh] pb-4 px-2 no-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl overflow-y-auto max-h-[60vh] pb-4 px-2 no-scrollbar z-10">
               {draftOptions.map((deck, i) => {
                   const dom = getDominantRune(deck);
                   const style = ELEMENT_STYLES[dom.rune];
                   return (
-                      <button 
-                        key={i} 
-                        onClick={() => selectDeck(deck)}
-                        className={`
-                            relative flex flex-col items-center p-4 sm:p-6 rounded-2xl border-2 transition-all hover:scale-105 active:scale-95
-                            ${style.bgColor} bg-opacity-10 border-white/20 hover:border-white hover:bg-opacity-20
-                            min-h-[180px] justify-between group
-                        `}
-                      >
+                      <button key={i} onClick={() => selectDeck(deck)} className={`relative flex flex-col items-center p-4 sm:p-6 rounded-2xl border-2 transition-all hover:scale-105 active:scale-95 ${style.bgColor} bg-opacity-10 border-white/20 hover:border-white hover:bg-opacity-20 min-h-[180px] justify-between group`}>
                           <div className="flex flex-col items-center">
-                            <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full ${style.bgColor} flex items-center justify-center mb-4 shadow-lg ring-4 ring-black/20 group-hover:scale-110 transition-transform`}>
-                                {React.cloneElement(ELEMENT_ICONS[dom.rune] as React.ReactElement<any>, { size: 28 })}
-                            </div>
+                            <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full ${style.bgColor} flex items-center justify-center mb-4 shadow-lg ring-4 ring-black/20 group-hover:scale-110 transition-transform`}>{React.cloneElement(ELEMENT_ICONS[dom.rune] as React.ReactElement<any>, { size: 28 })}</div>
                             <h3 className="text-lg font-bold mb-1 leading-tight">Deck {i+1}</h3>
-                            <div className="text-xs opacity-80 mb-3 text-center px-1">
-                                Foco em <span className="font-bold uppercase text-white tracking-wide">{dom.rune}</span>
-                            </div>
+                            <div className="text-xs opacity-80 mb-3 text-center px-1">Foco em <span className="font-bold uppercase text-white tracking-wide">{dom.rune}</span></div>
                           </div>
-                          
                           <div className="flex gap-1 flex-wrap justify-center opacity-60 bg-black/20 p-2 rounded-lg w-full">
-                              {/* Mini pills for runes in deck */}
-                              {Object.entries(deck.reduce((acc, c) => { acc[c.element] = (acc[c.element]||0)+1; return acc; }, {} as Record<string,number>))
-                                .sort((a,b) => (b[1] as number) - (a[1] as number))
-                                .slice(0,3)
-                                .map(([el, count]) => (
-                                  <div key={el} className="flex items-center gap-1">
-                                      <div className={`w-2 h-2 rounded-full ${ELEMENT_STYLES[el as ElementType].bgColor}`} />
-                                      <span className="text-[10px]">{count}</span>
-                                  </div>
-                                ))
-                              }
+                              {Object.entries(deck.reduce((acc, c) => { acc[c.element] = (acc[c.element]||0)+1; return acc; }, {} as Record<string,number>)).sort((a,b) => (b[1] as number) - (a[1] as number)).slice(0,3).map(([el, count]) => (<div key={el} className="flex items-center gap-1"><div className={`w-2 h-2 rounded-full ${ELEMENT_STYLES[el as ElementType].bgColor}`} /><span className="text-[10px]">{count}</span></div>))}
                           </div>
                       </button>
                   );
@@ -530,237 +692,94 @@ export default function App() {
   );
   
   if (phase === GamePhase.GAME_OVER) return (
-      <div className={`flex flex-col items-center justify-center h-screen text-white p-6 text-center ${bgStyle}`}>
-          {winner?.id === player.id ? <Trophy size={80} className="text-yellow-400 mb-4 drop-shadow-lg" /> : <Skull size={80} className="text-red-500 mb-4 drop-shadow-lg" />}
-          <h1 className="text-4xl font-black mb-2">{winner?.id === player.id ? 'VITÓRIA' : 'DERROTA'}</h1>
-          <button onClick={() => setPhase(GamePhase.MENU)} className="mt-8 bg-white/10 border border-white/20 text-white px-8 py-3 rounded-xl font-bold hover:bg-white/20">Menu Principal</button>
+      <div className={`flex flex-col items-center justify-center h-screen text-white p-6 text-center ${bgStyle} relative overflow-hidden`}>
+          
+          <div className="z-10">
+            {winner?.id === player.id ? <Trophy size={80} className="text-yellow-400 mb-4 drop-shadow-lg mx-auto" /> : <Skull size={80} className="text-red-500 mb-4 drop-shadow-lg mx-auto" />}
+            <h1 className="text-4xl font-black mb-2">{winner?.id === player.id ? 'VITÓRIA' : 'DERROTA'}</h1>
+            <button onClick={() => setPhase(GamePhase.MENU)} className="mt-8 bg-white/10 border border-white/20 text-white px-8 py-3 rounded-xl font-bold hover:bg-white/20">Menu Principal</button>
+          </div>
       </div>
   );
 
-  // --- BATTLE SCREEN ---
   return (
       <div className={`h-[100dvh] w-full max-w-md mx-auto flex flex-col relative overflow-hidden ${shake ? 'shake-impact' : ''} ${bgStyle}`}>
           
-          {/* Header */}
+          <CombatVFX 
+              animState={animState}
+              roundWinner={roundWinner}
+              winnerElement={winnerElement}
+              winnerPower={winnerPower}
+              playerElement={playerClashEl}
+              playerPower={playerClashPow}
+              enemyElement={enemyClashEl}
+              enemyPower={enemyClashPow}
+              abilityVfx={abilityVfx}
+          />
           <div className="p-3 flex justify-between items-center z-10 shrink-0">
-              <button 
-                onClick={() => setShowArenaInfo(true)}
-                className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md rounded-full pl-1 pr-3 py-1 border border-teal-500/30 shadow-lg active:scale-95 transition-transform"
-              >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${ELEMENT_STYLES[arenaEffect!.element].bgColor} text-white`}>
-                      {ELEMENT_ICONS[arenaEffect!.element]}
-                  </div>
-                  <span className="text-xs font-bold text-teal-100 flex items-center gap-1">
-                      {arenaEffect?.name} <Info size={10} className="opacity-50"/>
-                  </span>
+              <button onClick={() => setShowArenaInfo(true)} className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md rounded-full pl-1 pr-3 py-1 border border-teal-500/30 shadow-lg active:scale-95 transition-transform">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${ELEMENT_STYLES[arenaEffect!.element].bgColor} text-white`}>{ELEMENT_ICONS[arenaEffect!.element]}</div>
+                  <span className="text-xs font-bold text-teal-100 flex items-center gap-1">{arenaEffect?.name} <Info size={10} className="opacity-50"/></span>
               </button>
-              
               <div className="flex gap-2">
-                <button onClick={() => setShowHelp(true)} className="p-2 bg-slate-900/80 rounded-full text-teal-200 border border-teal-500/30">
-                    <HelpCircle size={16}/>
-                </button>
-                <button onClick={() => setMuted(toggleMute())} className="p-2 bg-slate-900/80 rounded-full text-teal-200 border border-teal-500/30">
-                    {muted ? <VolumeX size={16}/> : <Volume2 size={16}/>}
-                </button>
+                <button onClick={() => setShowHelp(true)} className="p-2 bg-slate-900/80 rounded-full text-teal-200 border border-teal-500/30"><HelpCircle size={16}/></button>
+                <button onClick={() => setMuted(toggleMute())} className="p-2 bg-slate-900/80 rounded-full text-teal-200 border border-teal-500/30">{muted ? <VolumeX size={16}/> : <Volume2 size={16}/>}</button>
               </div>
           </div>
-
-          {/* Enemy Zone */}
           <div className="px-4 pt-1 pb-2 flex flex-col items-center gap-1 z-10 shrink-0">
                <div className="w-full flex justify-between items-end">
                    <div className="flex items-center gap-2">
-                        {/* ENEMY ICON: SKULL */}
-                        <div className="w-10 h-10 rounded-xl border-2 border-red-500/50 bg-slate-800 shadow-md overflow-hidden shrink-0 flex items-center justify-center">
-                            <Skull className="text-red-400" size={24} strokeWidth={2.5} />
-                        </div>
+                        <div className="w-10 h-10 rounded-xl border-2 border-red-500/50 bg-slate-800 shadow-md overflow-hidden shrink-0 flex items-center justify-center"><Skull className="text-red-400" size={24} strokeWidth={2.5} /></div>
                         <div className="flex flex-col">
                             <span className="font-bold text-red-200 leading-none text-sm shadow-black drop-shadow-md">{enemy.name}</span>
-                            <div className="flex items-center mt-1 bg-black/40 rounded-md px-1.5 py-0.5 border border-white/10 w-fit">
-                                <Zap size={10} className="text-yellow-400 mr-1" fill="currentColor" />
-                                <span className="text-[10px] font-mono font-bold text-yellow-100">{enemy.energy}/{enemy.maxEnergy}</span>
-                            </div>
+                            <div className="flex items-center mt-1 bg-black/40 rounded-md px-1.5 py-0.5 border border-white/10 w-fit"><Zap size={10} className="text-yellow-400 mr-1" fill="currentColor" /><span className="text-[10px] font-mono font-bold text-yellow-100">{enemy.energy}/{enemy.maxEnergy}</span></div>
                         </div>
                    </div>
-
                    <RuneTracker runes={enemy.runes} alignRight />
                </div>
-               
-               {/* Enemy Hand */}
-               <div className="flex justify-center -space-x-2 opacity-80 scale-75 origin-top h-8">
-                   {enemy.hand.map((_, i) => (
-                       <div key={i} className="w-8 h-12 rounded bg-slate-700 border border-slate-500 shadow-md" style={{transform: `rotate(${(i-2)*5}deg) translateY(${Math.abs(i-2)*2}px)`}}></div>
-                   ))}
-               </div>
+               <div className="flex justify-center -space-x-2 opacity-80 scale-75 origin-top h-8">{enemy.hand.map((_, i) => (<div key={i} className="w-8 h-12 rounded bg-slate-700 border border-slate-500 shadow-md" style={{transform: `rotate(${(i-2)*5}deg) translateY(${Math.abs(i-2)*2}px)`}}></div>))}</div>
           </div>
-
-          {/* Battle Center (Table) - FLEX 1 to fill space */}
           <div className="flex-1 relative flex items-center justify-center shrink-0 min-h-[200px]">
-              {/* Magic Glow behind table */}
-              <div className="absolute w-56 h-56 bg-teal-500/10 rounded-full blur-3xl"></div>
-
+              <div className="absolute w-56 h-56 bg-teal-500/10 rounded-full blur-3xl z-0"></div>
               <div className="relative flex flex-col items-center gap-4 sm:gap-6 z-10 w-full px-8">
-                  
-                  {/* Enemy Slot (Socket) */}
-                  <div className={`
-                      w-24 h-36 sm:w-28 sm:h-40 rounded-2xl bg-black/20 border-2 border-white/5 
-                      shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center relative
-                      transition-transform duration-500
-                      ${animState === 'clash' ? 'anim-clash-enemy' : ''}
-                  `}>
-                      {/* Empty Socket Glow */}
+                  <div className={`w-24 h-36 sm:w-28 sm:h-40 rounded-2xl bg-black/20 border-2 border-white/5 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center relative transition-transform duration-500 ${animState === 'clash' ? 'anim-clash-enemy' : ''}`}>
                       {!enemyCard && <div className="absolute inset-0 flex items-center justify-center opacity-10"><Gem size={32} /></div>}
-                      
-                      {enemyCard ? (
-                          <div className="relative z-10">
-                            <Card 
-                                card={enemyCard} 
-                                disabled 
-                                reveal={animState === 'reveal'} 
-                                isWinning={animState === 'impact' && roundWinner === 'enemy'}
-                                isLosing={animState === 'impact' && roundWinner === 'player'}
-                            />
-                          </div>
-                      ) : null}
+                      {enemyCard ? (<div className="relative z-10"><Card card={enemyCard} disabled reveal={animState === 'reveal'} isWinning={animState === 'impact' && roundWinner === 'enemy'} isLosing={animState === 'impact' && roundWinner === 'player'} /></div>) : null}
                   </div>
-
-                  {/* Player Slot (Socket) */}
-                  <div className={`
-                      w-24 h-36 sm:w-28 sm:h-40 rounded-2xl bg-black/20 border-2 border-white/5 
-                      shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center relative
-                      transition-transform duration-500
-                      ${animState === 'clash' ? 'anim-clash-player' : ''}
-                  `}>
+                  <div className={`w-24 h-36 sm:w-28 sm:h-40 rounded-2xl bg-black/20 border-2 border-white/5 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center relative transition-transform duration-500 ${animState === 'clash' ? 'anim-clash-player' : ''}`}>
                        {!playerCard && <div className="absolute inset-0 flex items-center justify-center opacity-10"><Gem size={32} /></div>}
-                       
-                       {playerCard ? (
-                          <div className="relative z-10">
-                              <Card 
-                                card={playerCard} 
-                                disabled 
-                                isWinning={animState === 'impact' && roundWinner === 'player'}
-                                isLosing={animState === 'impact' && roundWinner === 'enemy'}
-                              />
-                          </div>
-                      ) : null}
+                       {playerCard ? (<div className="relative z-10"><Card card={playerCard} disabled isWinning={animState === 'impact' && roundWinner === 'player'} isLosing={animState === 'impact' && roundWinner === 'enemy'} /></div>) : null}
                   </div>
-
-                  {/* Result Popover */}
-                  {animState === 'finished' && (
-                      <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-                          <div className="bg-slate-900/90 text-teal-200 border border-teal-500/50 backdrop-blur-xl px-6 py-3 rounded-2xl font-black text-xl shadow-2xl animate-in zoom-in-90 fade-in duration-300">
-                              {lastRoundResult}
-                          </div>
-                      </div>
-                  )}
+                  {animState === 'finished' && (<div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none"><div className="bg-slate-900/90 text-teal-200 border border-teal-500/50 backdrop-blur-xl px-6 py-3 rounded-2xl font-black text-xl shadow-2xl animate-in zoom-in-90 fade-in duration-300">{lastRoundResult}</div></div>)}
               </div>
           </div>
-
-          {/* Player Zone - Fixed height area */}
           <div className="bg-slate-900/80 backdrop-blur-lg rounded-t-[2rem] border-t border-teal-500/20 shadow-[0_-10px_40px_rgba(0,0,0,0.3)] pb-4 pt-2 z-20 shrink-0">
               <div className="px-6 py-2 flex justify-between items-center mb-1">
                    <div className="flex items-center gap-2">
-                        {/* PLAYER ICON: SWORD & SHIELD */}
-                        <div className="w-10 h-10 rounded-xl border-2 border-teal-400 bg-slate-800 shadow-md overflow-hidden shrink-0 flex items-center justify-center relative">
-                            <Shield className="text-teal-500 absolute" size={20} fill="currentColor" fillOpacity={0.2} />
-                            <Swords className="text-teal-100 relative z-10" size={18} />
-                        </div>
+                        <div className="w-10 h-10 rounded-xl border-2 border-teal-400 bg-slate-800 shadow-md overflow-hidden shrink-0 flex items-center justify-center relative"><Shield className="text-teal-500 absolute" size={20} fill="currentColor" fillOpacity={0.2} /><Swords className="text-teal-100 relative z-10" size={18} /></div>
                         <div className="flex flex-col">
                             <span className="font-bold text-white leading-none text-lg">{player.name}</span>
-                            <div className="flex items-center mt-1 bg-black/40 rounded-md px-2 py-0.5 border border-white/10 w-fit">
-                                <Zap size={10} className="text-yellow-400 mr-1" fill="currentColor" />
-                                <span className="text-xs font-mono font-bold text-yellow-100">{player.energy}/{player.maxEnergy}</span>
-                            </div>
+                            <div className="flex items-center mt-1 bg-black/40 rounded-md px-2 py-0.5 border border-white/10 w-fit"><Zap size={10} className="text-yellow-400 mr-1" fill="currentColor" /><span className="text-xs font-mono font-bold text-yellow-100">{player.energy}/{player.maxEnergy}</span></div>
                         </div>
                    </div>
                   <RuneTracker runes={player.runes} />
               </div>
-
-              {/* Hand Scroller */}
               <div className="relative w-full h-48 sm:h-56">
                    <div className="absolute inset-y-0 left-0 w-8 z-10 bg-gradient-to-r from-slate-900 to-transparent pointer-events-none"></div>
                    <div className="absolute inset-y-0 right-0 w-8 z-10 bg-gradient-to-l from-slate-900 to-transparent pointer-events-none"></div>
-                   
-                   <div className="flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar px-6 items-end h-full pb-4">
+                   <div ref={handScrollRef} className="flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar px-6 items-end h-full pb-4">
                        {player.hand.map(card => {
                            const cost = calculateModifiedCost(card);
                            const affordable = player.energy >= cost;
-                           return (
-                               <Card 
-                                   key={card.id} 
-                                   card={{...card, cost}} 
-                                   onClick={() => playPlayerCard(card)}
-                                   disabled={combatPhase !== CombatPhase.PLANNING || !affordable}
-                                   selected={playerCard?.id === card.id}
-                               />
-                           );
+                           return (<Card key={card.id} card={{...card, cost}} onClick={() => playPlayerCard(card)} disabled={combatPhase !== CombatPhase.PLANNING || !affordable} selected={playerCard?.id === card.id} />);
                        })}
-                       {/* Coin Button */}
-                       {player.energy >= 1 && combatPhase === CombatPhase.PLANNING && (
-                           <button 
-                                onClick={() => playPlayerCard({...COIN_CARD, id: `coin-gen-${Math.random()}`, element: ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)]})}
-                                className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 border-2 border-yellow-200 shadow-lg flex items-center justify-center shrink-0 hover:scale-110 transition-transform group ml-2 relative overflow-hidden mb-6 sm:mb-8"
-                           >
-                               <div className="absolute inset-0 bg-white/30 skew-x-12 -translate-x-full group-hover:animate-[shimmer_1s_infinite] pointer-events-none"></div>
-                               <Coins className="text-white drop-shadow-md group-hover:rotate-12 transition-transform relative z-10" size={24} />
-                           </button>
-                       )}
-                       {player.energy < 1 && combatPhase === CombatPhase.PLANNING && (
-                            <button className="w-14 h-14 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center shrink-0 ml-2 mb-6 sm:mb-8">
-                                <SkipForward className="text-slate-500" />
-                            </button>
-                       )}
+                       {player.energy >= 1 && combatPhase === CombatPhase.PLANNING && (<button onClick={() => playPlayerCard({...COIN_CARD, id: `coin-gen-${Math.random()}`, element: ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)]})} className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 border-2 border-yellow-200 shadow-lg flex items-center justify-center shrink-0 hover:scale-110 transition-transform group ml-2 relative overflow-hidden mb-6 sm:mb-8"><div className="absolute inset-0 bg-white/30 skew-x-12 -translate-x-full group-hover:animate-[shimmer_1s_infinite] pointer-events-none"></div><Coins className="text-white drop-shadow-md group-hover:rotate-12 transition-transform relative z-10" size={24} /></button>)}
+                       {player.energy < 1 && combatPhase === CombatPhase.PLANNING && (<button className="w-14 h-14 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center shrink-0 ml-2 mb-6 sm:mb-8"><SkipForward className="text-slate-500" /></button>)}
                    </div>
               </div>
           </div>
-
-          {/* HELP MODAL */}
-          {showHelp && (
-              <Modal title="Ciclo Elemental" onClose={() => setShowHelp(false)}>
-                  <div className="space-y-2 mb-4">
-                       {helpChain.map((pair, i) => (
-                           <div key={i} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-2 border border-white/5">
-                               {/* Winner */}
-                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.w].bgColor} w-28 shadow-md`}>
-                                   {React.cloneElement(ELEMENT_ICONS[pair.w] as React.ReactElement<any>, { size: 14 })}
-                                   <span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.wName}</span>
-                               </div>
-                               
-                               {/* Arrow */}
-                               <div className="flex flex-col items-center px-2">
-                                   <span className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Vence</span>
-                                   <ArrowRight size={14} className="text-slate-400" />
-                               </div>
-
-                               {/* Loser */}
-                               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.l].bgColor} w-28 shadow-md`}>
-                                   {React.cloneElement(ELEMENT_ICONS[pair.l] as React.ReactElement<any>, { size: 14 })}
-                                   <span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.lName}</span>
-                               </div>
-                           </div>
-                       ))}
-                  </div>
-                  <p className="text-slate-400 mt-4 border-t border-white/10 pt-4"><strong>Regras Extras:</strong></p>
-                  <p>1. <strong>Energia:</strong> Recupera +2 por rodada (Máx 10).</p>
-                  <p>2. <strong>Empate:</strong> Se não houver vantagem, vence a carta com maior Poder total.</p>
-                  <p>3. <strong>Vantagem:</strong> Se você tiver vantagem elemental, você só perde se o inimigo tiver o <strong>dobro</strong> do seu poder.</p>
-                  <p>4. <strong>Vitória:</strong> Colete 3 runas iguais ou 5 diferentes para vencer a partida.</p>
-              </Modal>
-          )}
-
-          {/* ARENA MODAL */}
-          {showArenaInfo && arenaEffect && (
-              <Modal title="Efeito da Arena" onClose={() => setShowArenaInfo(false)}>
-                  <div className="flex items-center gap-3 mb-4 p-3 bg-white/5 rounded-xl border border-white/10">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${ELEMENT_STYLES[arenaEffect.element].bgColor} text-white`}>
-                          {ELEMENT_ICONS[arenaEffect.element]}
-                      </div>
-                      <div className="font-bold text-lg">{arenaEffect.name}</div>
-                  </div>
-                  <p className="text-center font-medium text-teal-200 text-lg">
-                      {arenaEffect.description}
-                  </p>
-              </Modal>
-          )}
+          {showHelp && (<Modal title="Ciclo Elemental" onClose={() => setShowHelp(false)}><div className="space-y-2 mb-4">{helpChain.map((pair, i) => (<div key={i} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-2 border border-white/5"><div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.w].bgColor} w-28 shadow-md`}>{React.cloneElement(ELEMENT_ICONS[pair.w] as React.ReactElement<any>, { size: 14 })}<span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.wName}</span></div><div className="flex flex-col items-center px-2"><span className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Vence</span><ArrowRight size={14} className="text-slate-400" /></div><div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${ELEMENT_STYLES[pair.l].bgColor} w-28 shadow-md`}>{React.cloneElement(ELEMENT_ICONS[pair.l] as React.ReactElement<any>, { size: 14 })}<span className="text-xs font-black uppercase text-white drop-shadow-sm">{pair.lName}</span></div></div>))}</div><p className="text-slate-400 mt-4 border-t border-white/10 pt-4"><strong>Regras Extras:</strong></p><p>1. <strong>Energia:</strong> Recupera +2 por rodada (Máx 10).</p><p>2. <strong>Empate:</strong> Se não houver vantagem, vence a carta com maior Poder total.</p><p>3. <strong>Vantagem:</strong> Se você tiver vantagem elemental, você só perde se o inimigo tiver o <strong>dobro</strong> do seu poder.</p><p>4. <strong>Vitória:</strong> Colete 3 runas iguais ou 5 diferentes para vencer a partida.</p></Modal>)}
+          {showArenaInfo && arenaEffect && (<Modal title="Efeito da Arena" onClose={() => setShowArenaInfo(false)}><div className="flex items-center gap-3 mb-4 p-3 bg-white/5 rounded-xl border border-white/10"><div className={`w-10 h-10 rounded-full flex items-center justify-center ${ELEMENT_STYLES[arenaEffect.element].bgColor} text-white`}>{ELEMENT_ICONS[arenaEffect.element]}</div><div className="font-bold text-lg">{arenaEffect.name}</div></div><p className="text-center font-medium text-teal-200 text-lg">{arenaEffect.description}</p></Modal>)}
       </div>
   );
 }

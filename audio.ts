@@ -16,6 +16,7 @@ export const toggleMute = () => {
   return isMuted;
 };
 
+// Basic Tone Generator
 const playTone = (freq: number, type: OscillatorType, duration: number, vol = 0.1, delay = 0, rampTo?: number) => {
   if (isMuted || !audioCtx) return;
 
@@ -38,7 +39,8 @@ const playTone = (freq: number, type: OscillatorType, duration: number, vol = 0.
   osc.stop(audioCtx.currentTime + delay + duration);
 };
 
-const playNoise = (duration: number, vol: number) => {
+// Noise Generator (Good for Fire, Air, Impacts)
+const playNoise = (duration: number, vol: number, filterType: BiquadFilterType = 'lowpass', filterFreq: number = 1000) => {
     if (isMuted || !audioCtx) return;
     const bufferSize = audioCtx.sampleRate * duration;
     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -51,10 +53,11 @@ const playNoise = (duration: number, vol: number) => {
     noise.buffer = buffer;
     const gain = audioCtx.createGain();
     
-    // Bandpass filter to make it sound like a hit
     const filter = audioCtx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 1000;
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
+    // Sweep filter for dynamic effect
+    filter.frequency.exponentialRampToValueAtTime(filterFreq / 4, audioCtx.currentTime + duration);
 
     gain.gain.setValueAtTime(vol, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
@@ -67,44 +70,93 @@ const playNoise = (duration: number, vol: number) => {
 
 export const playSound = {
   click: () => {
-    // Crisper, high-pitched mechanical click
     playTone(1200, 'sine', 0.05, 0.1);
     playTone(2000, 'triangle', 0.02, 0.05, 0.01); 
   },
   hover: () => {
-    // Subtle blip
     playTone(400, 'sine', 0.05, 0.02);
   },
   draw: () => {
-    // Smoother swoosh
     if (isMuted || !audioCtx) return;
     playTone(300, 'sine', 0.15, 0.05, 0, 800);
-    playNoise(0.1, 0.05); // Subtle friction noise
+    playNoise(0.1, 0.05, 'highpass', 3000); 
   },
   clash: () => {
-    // Impactful thud + crash
-    playTone(150, 'square', 0.2, 0.3, 0, 50); // Punchy low end drop
-    playNoise(0.2, 0.2); // Impact noise
+    // Tension building sound
+    playTone(100, 'sawtooth', 0.4, 0.1, 0, 50); 
+    playTone(150, 'square', 0.4, 0.05, 0.1);
   },
   winRound: () => {
-    // Major arpeggio
-    playTone(440, 'sine', 0.2, 0.1); // A4
-    playTone(554, 'sine', 0.2, 0.1, 0.1); // C#5
-    playTone(659, 'sine', 0.4, 0.1, 0.2); // E5
+    playTone(440, 'sine', 0.2, 0.1); 
+    playTone(554, 'sine', 0.2, 0.1, 0.1); 
+    playTone(659, 'sine', 0.4, 0.1, 0.2); 
   },
   loseRound: () => {
-    // Dissonant/Descending
     playTone(300, 'sawtooth', 0.3, 0.1);
     playTone(250, 'sawtooth', 0.4, 0.1, 0.1);
   },
   tie: () => {
-    // Neutral metal sound
     playTone(200, 'triangle', 0.2, 0.1);
     playTone(205, 'triangle', 0.2, 0.1);
   },
   bgmStart: () => {
-     // Start jingle
      playTone(440, 'square', 0.1, 0.05);
      playTone(880, 'square', 0.4, 0.05, 0.1);
+  },
+  
+  // --- ABILITY SFX ---
+  ability: (type: string) => {
+      if (isMuted || !audioCtx) return;
+      if (type === 'DRAW') {
+          // Magical swirl - Sine sweep up
+          playTone(400, 'sine', 0.4, 0.2, 0, 1200);
+          playNoise(0.4, 0.1, 'bandpass', 1500);
+      } else if (type === 'CHARGE') {
+          // Power up - Sawtooth zap
+          playTone(200, 'sawtooth', 0.1, 0.2, 0, 600);
+          playTone(300, 'square', 0.2, 0.1, 0.1, 800);
+          playNoise(0.2, 0.1, 'highpass', 4000);
+      }
+  },
+  
+  // --- ELEMENTAL SFX ---
+  elementImpact: (element: string, power: number) => {
+    if (isMuted || !audioCtx) return;
+    
+    // Scale intensity based on power (1-9)
+    const intensity = Math.min(1.5, 0.5 + (power / 10)); 
+    const duration = 0.3 + (power * 0.05);
+
+    switch (element) {
+        case 'FIRE':
+            // Crackling Explosion
+            playNoise(duration, 0.3 * intensity, 'lowpass', 800);
+            playTone(150, 'sawtooth', duration, 0.2 * intensity, 0, 50); // Low growl
+            break;
+        case 'LIGHTNING':
+            // High Pitch Zap
+            playTone(800 + (power * 100), 'sawtooth', 0.1, 0.2 * intensity, 0, 200); // Zap down
+            playNoise(0.2, 0.1 * intensity, 'highpass', 5000); // Static
+            break;
+        case 'WATER':
+            // Splash / Bubble
+            playNoise(duration, 0.3 * intensity, 'lowpass', 600);
+            playTone(400, 'sine', duration, 0.2 * intensity, 0, 100); // Drop
+            break;
+        case 'EARTH':
+            // Deep Thud
+            playTone(80, 'square', duration * 1.5, 0.4 * intensity, 0, 20);
+            playNoise(0.2, 0.2, 'lowpass', 200);
+            break;
+        case 'AIR':
+            // Whoosh
+            playNoise(duration, 0.2 * intensity, 'bandpass', 1500);
+            break;
+        case 'COIN':
+            // Metallic Ding
+            playTone(1200, 'sine', 0.5, 0.2, 0);
+            playTone(2400, 'sine', 0.5, 0.1, 0.05);
+            break;
+    }
   }
 };
